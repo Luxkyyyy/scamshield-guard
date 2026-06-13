@@ -77,14 +77,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "ScamShield AI" },
+      { name: "description", content: "AI-powered scam detection for suspicious messages and URLs." },
+      { name: "author", content: "ScamShield AI" },
+      { property: "og:title", content: "ScamShield AI" },
+      { property: "og:description", content: "Think before you click with AI-powered scam detection." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "theme-color", content: "#07111f" },
     ],
     links: [
       {

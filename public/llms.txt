@@ -1,0 +1,8 @@
+# ScamShield AI
+
+> AI-powered scam analysis for suspicious messages and URLs.
+
+ScamShield AI helps people identify phishing, impersonation, fake banking alerts, investment fraud, and other social-engineering attacks before they act.
+
+## Pages
+- [ScamShield AI Analyzer](/): Analyze suspicious content and review practical safety guidance.
