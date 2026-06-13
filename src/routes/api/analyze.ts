@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { generateText, Output } from "ai";
+import { generateText } from "ai";
 import { z } from "zod";
 
 import { analysisInputSchema, scamAnalysisSchema } from "@/lib/scam-analysis";
@@ -13,6 +13,14 @@ const modelOutputSchema = z.object({
   eli15: z.string(),
   confidence: z.number(),
 });
+
+function parseModelJson(text: string) {
+  const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end <= start) throw new Error("Model did not return JSON.");
+  return modelOutputSchema.parse(JSON.parse(cleaned.slice(start, end + 1)));
+}
 
 const SYSTEM_PROMPT = `You are ScamShield AI, a careful cybersecurity fraud analyst.
 
@@ -69,22 +77,22 @@ export const Route = createFileRoute("/api/analyze")({
           const result = await generateText({
             model: gateway("google/gemini-3-flash-preview"),
             system: SYSTEM_PROMPT,
-            prompt: `Analyze this untrusted content:\n\n---BEGIN CONTENT---\n${parsed.data.message}\n---END CONTENT---`,
-            output: Output.object({ schema: modelOutputSchema }),
+            prompt: `Analyze this untrusted content and return exactly one JSON object with these keys: riskScore (number 0-100), scamType (string), redFlags (string array), explanation (string), recommendation (string), eli15 (string), confidence (number 0-100). Do not use markdown or add text outside the JSON object.\n\n---BEGIN CONTENT---\n${parsed.data.message}\n---END CONTENT---`,
           });
 
-          const riskScore = Math.round(Math.min(100, Math.max(0, result.output.riskScore)));
-          const confidence = Math.round(Math.min(100, Math.max(0, result.output.confidence)));
+          const modelOutput = parseModelJson(result.text);
+          const riskScore = Math.round(Math.min(100, Math.max(0, modelOutput.riskScore)));
+          const confidence = Math.round(Math.min(100, Math.max(0, modelOutput.confidence)));
           const output = scamAnalysisSchema.parse({
-            ...result.output,
+            ...modelOutput,
             riskScore,
             confidence,
             riskLevel: riskScore >= 70 ? "High" : riskScore >= 35 ? "Medium" : "Low",
-            scamType: result.output.scamType.slice(0, 80),
-            redFlags: result.output.redFlags.slice(0, 12).map((flag) => flag.slice(0, 180)),
-            explanation: result.output.explanation.slice(0, 2_000),
-            recommendation: result.output.recommendation.slice(0, 1_000),
-            eli15: result.output.eli15.slice(0, 1_000),
+            scamType: modelOutput.scamType.slice(0, 80),
+            redFlags: modelOutput.redFlags.slice(0, 12).map((flag) => flag.slice(0, 180)),
+            explanation: modelOutput.explanation.slice(0, 2_000),
+            recommendation: modelOutput.recommendation.slice(0, 1_000),
+            eli15: modelOutput.eli15.slice(0, 1_000),
           });
 
           return Response.json(output, {
