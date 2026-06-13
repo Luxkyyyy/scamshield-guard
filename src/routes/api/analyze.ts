@@ -1,11 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { generateText, Output } from "ai";
 
-import {
-  createLovableAiGatewayProvider,
-  getLovableAiGatewayResponseHeaders,
-  getLovableAiGatewayRunId,
-} from "@/lib/ai-gateway.server";
 import { analysisInputSchema, scamAnalysisSchema } from "@/lib/scam-analysis";
 
 const SYSTEM_PROMPT = `You are ScamShield AI, a careful cybersecurity fraud analyst.
@@ -51,6 +46,11 @@ export const Route = createFileRoute("/api/analyze")({
         if (!lovableApiKey) return errorResponse("AI analysis is not configured.", 500);
 
         try {
+          const {
+            createLovableAiGatewayProvider,
+            getLovableAiGatewayResponseHeaders,
+            getLovableAiGatewayRunId,
+          } = await import("@/lib/ai-gateway.server");
           const gateway = createLovableAiGatewayProvider(
             lovableApiKey,
             getLovableAiGatewayRunId(request),

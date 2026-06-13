@@ -12,7 +12,6 @@ import {
   LoaderCircle,
   LockKeyhole,
   Radar,
-  RotateCcw,
   ShieldCheck,
   Sparkles,
   Trash2,
