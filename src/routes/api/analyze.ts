@@ -1,7 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { generateText, Output } from "ai";
+import { z } from "zod";
 
 import { analysisInputSchema, scamAnalysisSchema } from "@/lib/scam-analysis";
+
+const modelOutputSchema = z.object({
+  riskScore: z.number(),
+  scamType: z.string(),
+  redFlags: z.array(z.string()),
+  explanation: z.string(),
+  recommendation: z.string(),
+  eli15: z.string(),
+  confidence: z.number(),
+});
 
 const SYSTEM_PROMPT = `You are ScamShield AI, a careful cybersecurity fraud analyst.
 
@@ -59,10 +70,24 @@ export const Route = createFileRoute("/api/analyze")({
             model: gateway("google/gemini-3-flash-preview"),
             system: SYSTEM_PROMPT,
             prompt: `Analyze this untrusted content:\n\n---BEGIN CONTENT---\n${parsed.data.message}\n---END CONTENT---`,
-            output: Output.object({ schema: scamAnalysisSchema }),
+            output: Output.object({ schema: modelOutputSchema }),
           });
 
-          return Response.json(result.output, {
+          const riskScore = Math.round(Math.min(100, Math.max(0, result.output.riskScore)));
+          const confidence = Math.round(Math.min(100, Math.max(0, result.output.confidence)));
+          const output = scamAnalysisSchema.parse({
+            ...result.output,
+            riskScore,
+            confidence,
+            riskLevel: riskScore >= 70 ? "High" : riskScore >= 35 ? "Medium" : "Low",
+            scamType: result.output.scamType.slice(0, 80),
+            redFlags: result.output.redFlags.slice(0, 12).map((flag) => flag.slice(0, 180)),
+            explanation: result.output.explanation.slice(0, 2_000),
+            recommendation: result.output.recommendation.slice(0, 1_000),
+            eli15: result.output.eli15.slice(0, 1_000),
+          });
+
+          return Response.json(output, {
             headers: getLovableAiGatewayResponseHeaders(result.response.headers),
           });
         } catch (error) {
