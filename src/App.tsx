@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import logoAsset from "@/assets/scamshield-logo.png.asset.json";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -110,7 +109,7 @@ export default function App() {
       <header className="fixed inset-x-0 top-0 z-50 border-b border-border/70 bg-background/80 backdrop-blur-xl">
         <nav className="mx-auto flex h-18 max-w-7xl items-center justify-between px-5 lg:px-8" aria-label="Main navigation">
           <a href="#top" className="flex items-center gap-3" aria-label="ScamShield AI home">
-            <img src={logoAsset.url} alt="ScamShield AI shield logo" className="h-11 w-36 rounded-md object-cover object-center" />
+            <img src="/scamshield-logo.png" alt="ScamShield AI shield logo" className="h-11 w-36 rounded-md object-cover object-center" />
           </a>
           <div className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
             <a href="#analyzer" className="transition-colors hover:text-foreground">Analyzer</a>

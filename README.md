@@ -13,17 +13,27 @@
 
 ## Stack
 
-- TanStack Start, React 19, Vite, Tailwind CSS v4
+- React 19, TypeScript, Vite, Tailwind CSS v4
+- Netlify Functions for the secure AI endpoint
 - Lovable AI Gateway via the Vercel AI SDK
-- Lovable Cloud backend infrastructure
 - Zod validation on both client and server
 
 ## Local setup
 
 1. Install dependencies: `bun install`
-2. Copy `.env.example` to `.env`
-3. Provide `LOVABLE_API_KEY` through your secure environment (Lovable manages this automatically in hosted environments)
-4. Start development: `bun run dev`
+2. Install the Netlify CLI: `npm install -g netlify-cli`
+3. Create a local `.env` with `LOVABLE_API_KEY=...`
+4. Start the full app and function locally: `netlify dev`
+
+## Deploy to Netlify
+
+1. Push the repository to GitHub, GitLab, or Bitbucket.
+2. In Netlify, choose **Add new site → Import an existing project**.
+3. Netlify reads `netlify.toml`; the build command is `bun run build` and publish directory is `dist`.
+4. Add `LOVABLE_API_KEY` under **Site configuration → Environment variables**.
+5. Deploy. `/api/analyze` is automatically routed to the Netlify Function.
+
+Never expose `LOVABLE_API_KEY` through a `VITE_` variable; those values are bundled into browser code.
 
 ## API
 
