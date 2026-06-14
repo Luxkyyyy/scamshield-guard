@@ -1,4 +1,3 @@
-import { createFileRoute } from "@tanstack/react-router";
 import {
   AlertTriangle,
   ArrowRight,
@@ -27,18 +26,6 @@ import {
   type ScamAnalysis,
 } from "@/lib/scam-analysis";
 
-export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "ScamShield AI | Scam & Link Detector" },
-      { name: "description", content: "Analyze suspicious messages and URLs with AI-powered scam detection, clear risk scores, and practical safety guidance." },
-      { property: "og:title", content: "ScamShield AI | Think Before You Click" },
-      { property: "og:description", content: "AI-powered scam detection for messages, emails, social posts, and suspicious links." },
-    ],
-  }),
-  component: Index,
-});
-
 const HISTORY_KEY = "scamshield-history-v1";
 
 function riskTone(level: ScamAnalysis["riskLevel"]) {
@@ -51,7 +38,7 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
-function Index() {
+export default function App() {
   const [mode, setMode] = useState<"message" | "url">("message");
   const [input, setInput] = useState("");
   const [result, setResult] = useState<ScamAnalysis | null>(null);
