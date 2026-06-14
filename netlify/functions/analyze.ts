@@ -56,7 +56,13 @@ export default async (request: Request) => {
   }
 
   const lovableApiKey = process.env.LOVABLE_API_KEY;
-  if (!lovableApiKey) return errorResponse("AI analysis is not configured.", 500);
+  if (!lovableApiKey) {
+    console.error("LOVABLE_API_KEY is missing from Netlify environment variables.");
+    return errorResponse(
+      "AI is not configured: LOVABLE_API_KEY is missing on the Netlify site. Add it under Site configuration → Environment variables (scope: Functions), then redeploy.",
+      500,
+    );
+  }
 
   try {
     const gateway = createLovableAiGatewayProvider(
