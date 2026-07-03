@@ -11,8 +11,16 @@ import { analysisInputSchema, scamAnalysisSchema } from "../../src/lib/scam-anal
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3-flash-preview";
-const GEMINI_MODEL = "gemini-2.0-flash";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_MODELS = [
+  "gemini-flash-lite-latest",
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash",
+] as const;
+
+function geminiUrl(model: string) {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+}
 
 const modelOutputSchema = z.object({
   riskScore: z.number(),
@@ -218,7 +226,10 @@ async function analyzeWithGemini(args: {
     parts.push({ inlineData: image });
   }
 
-  const res = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(args.geminiApiKey)}`, {
+  let lastError = "Gemini did not return a successful response.";
+
+  for (const model of GEMINI_MODELS) {
+    const res = await fetch(`${geminiUrl(model)}?key=${encodeURIComponent(args.geminiApiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -228,19 +239,24 @@ async function analyzeWithGemini(args: {
         temperature: 0.2,
       },
     }),
-  });
+    });
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    console.error("Gemini error", res.status, text);
-    throw new Error(`Gemini failed with status ${res.status}.`);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      lastError = `Gemini ${model} failed with status ${res.status}.`;
+      console.error("Gemini error", model, res.status, text);
+      if ([429, 500, 502, 503, 504].includes(res.status)) continue;
+      throw new Error(lastError);
+    }
+
+    const data = (await res.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const raw = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n") ?? "";
+    return normalizeModelOutput(parseModelJson(raw));
   }
 
-  const data = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const raw = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n") ?? "";
-  return normalizeModelOutput(parseModelJson(raw));
+  throw new Error(lastError);
 }
 
 export default async (request: Request) => {
