@@ -1,6 +1,9 @@
 // Netlify Function: ScamShield AI analyzer.
 // Accepts: message text, optional screenshot (base64 data URL), optional phone number.
-// Calls Lovable AI Gateway directly via /v1/chat/completions to support multimodal input.
+// Priority order:
+// 1) GEMINI_API_KEY for Netlify-friendly/free-tier AI analysis.
+// 2) LOVABLE_API_KEY when running inside Lovable/Lovable AI Gateway.
+// 3) Local rules-based fallback so the deployed hackathon demo still works without paid AI.
 
 import { z } from "zod";
 
@@ -8,6 +11,8 @@ import { analysisInputSchema, scamAnalysisSchema } from "../../src/lib/scam-anal
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3-flash-preview";
+const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const modelOutputSchema = z.object({
   riskScore: z.number(),
@@ -64,12 +69,178 @@ function errorResponse(message: string, status: number) {
   return Response.json({ error: message }, { status });
 }
 
+function jsonResponse(output: unknown) {
+  return Response.json(output, {
+    headers: {
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 function parseModelJson(text: string) {
   const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
   if (start === -1 || end <= start) throw new Error("Model did not return JSON.");
   return modelOutputSchema.parse(JSON.parse(cleaned.slice(start, end + 1)));
+}
+
+function splitDataUrl(dataUrl: string) {
+  const match = dataUrl.match(/^data:(image\/(?:png|jpe?g|webp|gif));base64,(.+)$/i);
+  if (!match) throw new Error("Invalid image data URL.");
+  return { mimeType: match[1], data: match[2] };
+}
+
+function normalizeModelOutput(output: z.infer<typeof modelOutputSchema>) {
+  const riskScore = Math.round(Math.min(100, Math.max(0, output.riskScore)));
+  const confidence = Math.round(Math.min(100, Math.max(0, output.confidence)));
+
+  return scamAnalysisSchema.parse({
+    ...output,
+    riskScore,
+    confidence,
+    riskLevel: riskScore >= 70 ? "High" : riskScore >= 35 ? "Medium" : "Low",
+    scamType: output.scamType.slice(0, 80),
+    redFlags: (output.redFlags ?? []).slice(0, 12).map((f) => f.slice(0, 180)),
+    explanation: output.explanation.slice(0, 2_000),
+    recommendation: output.recommendation.slice(0, 1_000),
+    eli15: output.eli15.slice(0, 1_000),
+    phone: output.phone
+      ? {
+          number: output.phone.number.slice(0, 40),
+          country: output.phone.country.slice(0, 80),
+          carrierType: output.phone.carrierType.slice(0, 80),
+          reputation: output.phone.reputation,
+          notes: output.phone.notes.slice(0, 600),
+        }
+      : null,
+  });
+}
+
+function localRulesAnalysis(input: { message?: string; imageDataUrl?: string; phoneNumber?: string }) {
+  const evidence = `${input.message ?? ""} ${input.phoneNumber ?? ""}`.toLowerCase();
+  const redFlags: string[] = [];
+  let riskScore = 18;
+
+  const checks: Array<[RegExp, string, number]> = [
+    [/(otp|one[-\s]?time|verification code|2fa|password|pin|seed phrase|recovery phrase)/i, "Requests sensitive codes, passwords, PINs, or recovery phrases", 28],
+    [/(urgent|immediately|within\s+\d+\s+(minutes|hours)|final notice|act now|limited time)/i, "Creates urgency or pressure to act quickly", 18],
+    [/(account.*(locked|suspended|blocked)|verify.*account|unusual activity|security alert)/i, "Claims account trouble and pushes verification", 20],
+    [/(bank|paypal|cash app|venmo|zelle|binance|coinbase|wallet|crypto|bitcoin|usdt)/i, "Mentions money, banking, crypto, or payment platforms", 15],
+    [/(gift card|wire transfer|western union|moneygram|payment link)/i, "Requests a hard-to-reverse payment method", 24],
+    [/(prize|lottery|winner|grant|inheritance|refund|tax rebate)/i, "Promises unexpected money or rewards", 22],
+    [/(job offer|remote work|easy money|investment|guaranteed return|double your money)/i, "Uses common job or investment scam language", 22],
+    [/(bit\.ly|tinyurl|t\.co|goo\.gl|is\.gd|cutt\.ly|shorturl)/i, "Uses a shortened or hidden link", 22],
+    [/(http:\/\/|https:\/\/)/i, "Contains an external link that should be verified before clicking", 12],
+    [/(whatsapp|telegram|signal).*(payment|code|verify|investment)/i, "Moves sensitive action into a chat app", 16],
+  ];
+
+  for (const [pattern, flag, points] of checks) {
+    if (pattern.test(evidence)) {
+      redFlags.push(flag);
+      riskScore += points;
+    }
+  }
+
+  if (input.imageDataUrl) {
+    redFlags.push("Screenshot was uploaded, but OCR needs an AI key on Netlify");
+    riskScore += 8;
+  }
+
+  let phone = null;
+  if (input.phoneNumber) {
+    const number = input.phoneNumber.trim();
+    const digits = number.replace(/\D/g, "");
+    const startsInternational = number.startsWith("+");
+    const unusualLength = digits.length < 7 || digits.length > 15;
+    const likelyShortcode = digits.length >= 3 && digits.length <= 6;
+    const suspicious = unusualLength || likelyShortcode || /\+?(234|232|237|92|880|63|855)/.test(number);
+    if (suspicious) {
+      redFlags.push("Phone number format or country code needs extra verification");
+      riskScore += 18;
+    }
+    phone = {
+      number,
+      country: startsInternational ? "International number (country inferred from prefix)" : "Unknown / local format",
+      carrierType: likelyShortcode ? "Shortcode" : "Unknown carrier type",
+      reputation: suspicious ? "Suspicious" : "Unknown",
+      notes:
+        "Rules-based phone check only. For owner/name lookup, carriers do not provide a reliable public database; verify using official organization channels.",
+    };
+  }
+
+  riskScore = Math.min(100, Math.max(0, riskScore));
+  const riskLevel = riskScore >= 70 ? "High" : riskScore >= 35 ? "Medium" : "Low";
+  const scamType =
+    riskScore >= 70 ? "Likely scam / phishing" : riskScore >= 35 ? "Suspicious message" : "Low obvious risk";
+  const flags = redFlags.length > 0 ? redFlags.slice(0, 12) : ["No major scam keywords were detected by the fallback scanner"];
+
+  return scamAnalysisSchema.parse({
+    riskScore,
+    riskLevel,
+    scamType,
+    redFlags: flags,
+    explanation:
+      "This result used ScamShield's built-in fallback scanner because no AI key is configured on Netlify. It checks urgency, money requests, credential/code requests, suspicious links, common scam phrases, and phone-number risk signals. Add GEMINI_API_KEY on Netlify to enable full AI reasoning and screenshot OCR.",
+    recommendation:
+      riskScore >= 35
+        ? "Do not click links or reply with codes, passwords, card details, or payments. Contact the claimed company/person through their official website, app, or known phone number."
+        : "Still verify through official channels before sharing personal information or money. Do not trust links or phone numbers inside the message alone.",
+    eli15:
+      riskScore >= 35
+        ? "This looks risky because it uses tricks scammers like: pressure, money, links, or asking for private codes. Check it somewhere official before doing anything."
+        : "I did not see the biggest scam signs, but that does not prove it is safe. Be careful and verify it first.",
+    confidence: input.imageDataUrl ? 45 : 68,
+    phone,
+  });
+}
+
+async function analyzeWithGemini(args: {
+  geminiApiKey: string;
+  message?: string;
+  imageDataUrl?: string;
+  phoneNumber?: string;
+}) {
+  const parts: Array<Record<string, unknown>> = [
+    {
+      text: `${SYSTEM_PROMPT}\n\nAnalyze this evidence and return only the JSON object.`,
+    },
+  ];
+
+  const textParts: string[] = [];
+  if (args.message) textParts.push(`---BEGIN MESSAGE---\n${args.message}\n---END MESSAGE---`);
+  if (args.phoneNumber) textParts.push(`Sender phone number to analyze: ${args.phoneNumber}`);
+  if (args.imageDataUrl) textParts.push("A screenshot is attached. OCR it and analyze it.");
+  parts.push({ text: textParts.join("\n\n") || "Analyze the attached evidence for scam indicators." });
+
+  if (args.imageDataUrl) {
+    const image = splitDataUrl(args.imageDataUrl);
+    parts.push({ inlineData: image });
+  }
+
+  const res = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(args.geminiApiKey)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.2,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    console.error("Gemini error", res.status, text);
+    throw new Error(`Gemini failed with status ${res.status}.`);
+  }
+
+  const data = (await res.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  const raw = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n") ?? "";
+  return normalizeModelOutput(parseModelJson(raw));
 }
 
 export default async (request: Request) => {
@@ -88,12 +259,20 @@ export default async (request: Request) => {
   }
   const { message, imageDataUrl, phoneNumber } = parsed.data;
 
+  const geminiApiKey = process.env.GEMINI_API_KEY;
   const lovableApiKey = process.env.LOVABLE_API_KEY;
+
+  if (geminiApiKey) {
+    try {
+      return jsonResponse(await analyzeWithGemini({ geminiApiKey, message, imageDataUrl, phoneNumber }));
+    } catch (error) {
+      console.error("Gemini analysis failed; using fallback", error);
+      return jsonResponse(localRulesAnalysis({ message, imageDataUrl, phoneNumber }));
+    }
+  }
+
   if (!lovableApiKey) {
-    return errorResponse(
-      "AI is not configured: LOVABLE_API_KEY is missing on the Netlify site. Add it under Site configuration → Environment variables (scope: Functions), then redeploy.",
-      500,
-    );
+    return jsonResponse(localRulesAnalysis({ message, imageDataUrl, phoneNumber }));
   }
 
   // Build the user message: text block(s) + optional image block.
@@ -150,34 +329,11 @@ export default async (request: Request) => {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const raw = data.choices?.[0]?.message?.content ?? "";
-    const modelOutput = parseModelJson(raw);
+    const output = normalizeModelOutput(parseModelJson(raw));
 
-    const riskScore = Math.round(Math.min(100, Math.max(0, modelOutput.riskScore)));
-    const confidence = Math.round(Math.min(100, Math.max(0, modelOutput.confidence)));
-    const output = scamAnalysisSchema.parse({
-      ...modelOutput,
-      riskScore,
-      confidence,
-      riskLevel: riskScore >= 70 ? "High" : riskScore >= 35 ? "Medium" : "Low",
-      scamType: modelOutput.scamType.slice(0, 80),
-      redFlags: (modelOutput.redFlags ?? []).slice(0, 12).map((f) => f.slice(0, 180)),
-      explanation: modelOutput.explanation.slice(0, 2_000),
-      recommendation: modelOutput.recommendation.slice(0, 1_000),
-      eli15: modelOutput.eli15.slice(0, 1_000),
-      phone: modelOutput.phone
-        ? {
-            number: modelOutput.phone.number.slice(0, 40),
-            country: modelOutput.phone.country.slice(0, 80),
-            carrierType: modelOutput.phone.carrierType.slice(0, 80),
-            reputation: modelOutput.phone.reputation,
-            notes: modelOutput.phone.notes.slice(0, 600),
-          }
-        : null,
-    });
-
-    return Response.json(output);
+    return jsonResponse(output);
   } catch (error) {
-    console.error("Scam analysis failed", error);
-    return errorResponse("The analysis could not be completed. Please try again.", 500);
+    console.error("Lovable AI analysis failed; using fallback", error);
+    return jsonResponse(localRulesAnalysis({ message, imageDataUrl, phoneNumber }));
   }
 };
