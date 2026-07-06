@@ -132,19 +132,20 @@ function normalizeModelOutput(output: z.infer<typeof modelOutputSchema>) {
 function localRulesAnalysis(input: { message?: string; imageDataUrl?: string; phoneNumber?: string }) {
   const evidence = `${input.message ?? ""} ${input.phoneNumber ?? ""}`.toLowerCase();
   const redFlags: string[] = [];
-  let riskScore = 18;
+  let riskScore = 5;
 
+  // Only strong, tactic-based signals score meaningfully. Topic keywords alone don't.
   const checks: Array<[RegExp, string, number]> = [
-    [/(otp|one[-\s]?time|verification code|2fa|password|pin|seed phrase|recovery phrase)/i, "Requests sensitive codes, passwords, PINs, or recovery phrases", 28],
-    [/(urgent|immediately|within\s+\d+\s+(minutes|hours)|final notice|act now|limited time)/i, "Creates urgency or pressure to act quickly", 18],
-    [/(account.*(locked|suspended|blocked)|verify.*account|unusual activity|security alert)/i, "Claims account trouble and pushes verification", 20],
-    [/(bank|paypal|cash app|venmo|zelle|binance|coinbase|wallet|crypto|bitcoin|usdt)/i, "Mentions money, banking, crypto, or payment platforms", 15],
-    [/(gift card|wire transfer|western union|moneygram|payment link)/i, "Requests a hard-to-reverse payment method", 24],
-    [/(prize|lottery|winner|grant|inheritance|refund|tax rebate)/i, "Promises unexpected money or rewards", 22],
-    [/(job offer|remote work|easy money|investment|guaranteed return|double your money)/i, "Uses common job or investment scam language", 22],
-    [/(bit\.ly|tinyurl|t\.co|goo\.gl|is\.gd|cutt\.ly|shorturl)/i, "Uses a shortened or hidden link", 22],
-    [/(http:\/\/|https:\/\/)/i, "Contains an external link that should be verified before clicking", 12],
-    [/(whatsapp|telegram|signal).*(payment|code|verify|investment)/i, "Moves sensitive action into a chat app", 16],
+    [/(send|share|give|tell|reply with).{0,30}(otp|one[-\s]?time|verification code|2fa|password|pin|seed phrase|recovery phrase)/i, "Asks recipient to share a code, password, PIN, or seed phrase", 45],
+    [/(seed phrase|recovery phrase|private key)/i, "Mentions crypto seed/recovery phrase — near-universal scam signal", 35],
+    [/(gift card|itunes card|steam card|google play card).{0,40}(send|buy|pay|purchase)/i, "Requests payment via gift cards", 40],
+    [/(wire transfer|western union|moneygram).{0,40}(urgent|now|today|immediately)/i, "Pressures an irreversible wire transfer", 30],
+    [/(account.*(locked|suspended|blocked|will be closed)).{0,80}(click|verify|confirm|log ?in|update)/i, "Account-lock scare combined with a click/verify action", 30],
+    [/(bit\.ly|tinyurl|t\.co|goo\.gl|is\.gd|cutt\.ly|shorturl|rebrand\.ly)/i, "Uses a shortened/obfuscated link", 18],
+    [/(you (have )?won|claim your prize|lottery winner|inheritance|unclaimed funds)/i, "Unsolicited prize / inheritance claim", 25],
+    [/(guaranteed (returns?|profit)|double your (money|investment)|risk[-\s]?free investment)/i, "Guaranteed-return investment pitch", 28],
+    [/(urgent|immediately|within\s+\d+\s+(minutes|hours)|final notice|act now).{0,80}(click|pay|send|transfer|verify)/i, "Urgency combined with a click/pay/verify demand", 20],
+    [/(https?:\/\/[^\s]*@|https?:\/\/\d{1,3}(\.\d{1,3}){3})/i, "Link uses an IP address or embedded credentials", 30],
   ];
 
   for (const [pattern, flag, points] of checks) {
@@ -155,8 +156,8 @@ function localRulesAnalysis(input: { message?: string; imageDataUrl?: string; ph
   }
 
   if (input.imageDataUrl) {
-    redFlags.push("Screenshot was uploaded, but OCR needs an AI key on Netlify");
-    riskScore += 8;
+    // Don't inflate risk just because an image was uploaded.
+    redFlags.push("Screenshot uploaded — full OCR requires GEMINI_API_KEY on Netlify");
   }
 
   let phone = null;
