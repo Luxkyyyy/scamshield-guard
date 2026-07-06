@@ -164,9 +164,27 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(built.payload),
       });
-      const payload = (await response.json()) as ScamAnalysis | { error?: string };
-      if (!response.ok || "error" in payload)
-        throw new Error("error" in payload ? payload.error : "Analysis failed.");
+      const rawText = await response.text();
+      let payload: (ScamAnalysis & { error?: undefined }) | { error?: string } | null = null;
+      if (rawText) {
+        try {
+          payload = JSON.parse(rawText);
+        } catch {
+          payload = null;
+        }
+      }
+      if (!response.ok) {
+        const msg =
+          (payload && "error" in payload && payload.error) ||
+          (response.status === 404
+            ? "Analyzer endpoint not found. On Netlify, redeploy so /api/analyze is available."
+            : response.status === 413
+              ? "Screenshot too large. Try a smaller image."
+              : `Analysis failed (HTTP ${response.status}).`);
+        throw new Error(msg);
+      }
+      if (!payload) throw new Error("The analyzer returned an empty response. Please try again.");
+      if ("error" in payload && payload.error) throw new Error(payload.error);
       const analysis = payload as ScamAnalysis;
       setResult(analysis);
       const entry: HistoryEntry = {
