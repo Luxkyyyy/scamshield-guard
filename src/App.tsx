@@ -263,16 +263,12 @@ export default function App() {
 
       <main id="top">
         <section className="hero-grid relative mx-auto flex min-h-[720px] max-w-7xl items-center px-5 pb-20 pt-32 lg:px-8">
-          <div className="hero-glow" aria-hidden="true" />
           <div className="relative z-10 grid w-full items-center gap-14 lg:grid-cols-[1.05fr_.95fr]">
             <div>
-              <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/8 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-                <Radar className="size-3.5" /> AI-powered threat intelligence
-              </div>
-              <h1 className="max-w-3xl text-balance text-5xl font-bold leading-[.98] tracking-[-0.045em] sm:text-6xl lg:text-7xl">
+              <h1 className="max-w-3xl text-balance text-5xl font-bold leading-[1] tracking-[-0.03em] sm:text-6xl lg:text-7xl">
                 Think before
                 <br />
-                you <span className="text-gradient">click.</span>
+                you <span className="text-primary">click.</span>
               </h1>
               <p className="mt-7 max-w-xl text-lg leading-8 text-muted-foreground">
                 Paste a message, drop a screenshot, or check a phone number. ScamShield AI scores
@@ -281,7 +277,7 @@ export default function App() {
               <div className="mt-9 flex flex-wrap items-center gap-4">
                 <Button
                   size="lg"
-                  className="h-12 rounded-lg px-6 shadow-glow"
+                  className="h-12 rounded-lg px-6"
                   onClick={() => analyzerRef.current?.scrollIntoView({ behavior: "smooth" })}
                 >
                   Analyze a threat <ArrowRight />
@@ -778,10 +774,14 @@ export default function App() {
           <div className="flex items-center gap-2 font-semibold text-foreground">
             <ShieldCheck className="size-5 text-primary" /> ScamShield AI
           </div>
-          <p>Decision support, not a guarantee. When in doubt, verify independently.</p>
-          <a href="#top" className="flex items-center gap-1 hover:text-foreground">
-            Back to top <ExternalLink className="size-3" />
-          </a>
+          <p className="text-center">Decision support, not a guarantee. When in doubt, verify independently.</p>
+          <div className="flex items-center gap-5">
+            <a href="/privacy" className="hover:text-foreground">Privacy</a>
+            <a href="/terms" className="hover:text-foreground">Terms</a>
+            <a href="#top" className="flex items-center gap-1 hover:text-foreground">
+              Top <ExternalLink className="size-3" />
+            </a>
+          </div>
         </div>
       </footer>
     </div>
