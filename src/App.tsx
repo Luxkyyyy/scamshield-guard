@@ -774,10 +774,14 @@ export default function App() {
           <div className="flex items-center gap-2 font-semibold text-foreground">
             <ShieldCheck className="size-5 text-primary" /> ScamShield AI
           </div>
-          <p>Decision support, not a guarantee. When in doubt, verify independently.</p>
-          <a href="#top" className="flex items-center gap-1 hover:text-foreground">
-            Back to top <ExternalLink className="size-3" />
-          </a>
+          <p className="text-center">Decision support, not a guarantee. When in doubt, verify independently.</p>
+          <div className="flex items-center gap-5">
+            <a href="/privacy" className="hover:text-foreground">Privacy</a>
+            <a href="/terms" className="hover:text-foreground">Terms</a>
+            <a href="#top" className="flex items-center gap-1 hover:text-foreground">
+              Top <ExternalLink className="size-3" />
+            </a>
+          </div>
         </div>
       </footer>
     </div>
