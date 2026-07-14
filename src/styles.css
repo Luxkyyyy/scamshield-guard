@@ -175,20 +175,12 @@
   .result-label { @apply flex items-center gap-2 text-sm font-semibold; }
   .result-label svg { @apply size-4 text-primary; }
   .text-gradient {
-    background: linear-gradient(100deg, var(--primary), var(--danger));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: var(--foreground);
   }
   .hero-grid {
-    background-image: linear-gradient(color-mix(in oklab, var(--border) 22%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--border) 22%, transparent) 1px, transparent 1px);
+    background-image: linear-gradient(color-mix(in oklab, var(--border) 18%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--border) 18%, transparent) 1px, transparent 1px);
     background-size: 52px 52px;
     mask-image: linear-gradient(to bottom, transparent, black 18%, black 78%, transparent);
-  }
-  .hero-glow {
-    position: absolute; inset: 5% -10% auto 20%; height: 70%; pointer-events: none;
-    background: radial-gradient(circle at 70% 40%, color-mix(in oklab, var(--danger) 18%, transparent), transparent 32%), radial-gradient(circle at 45% 45%, color-mix(in oklab, var(--primary) 20%, transparent), transparent 45%);
-    filter: blur(28px);
   }
   .scan-line {
     position: absolute; inset-inline: 0; top: 0; height: 1px;
