@@ -1,5 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import path from "path";
 import { defineConfig, type Plugin } from "vite";
 
 // Dev-only: expose the Netlify Function at /api/analyze so the preview works
@@ -47,7 +48,9 @@ function analyzeApiPlugin(): Plugin {
 export default defineConfig({
   plugins: [react(), tailwindcss(), analyzeApiPlugin()],
   resolve: {
-    tsconfigPaths: true,
+    alias: {
+      "@": path.resolve(__dirname, "src"),
+    },
   },
   server: {
     host: "0.0.0.0",
